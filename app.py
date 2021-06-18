@@ -1,11 +1,21 @@
 from api import API
+from utils import render
 
 app = API()
 
 
+class Pokus:
+    meloun = ['meloun1', 'meloun2', 'meloun3']
+    true = False
+    ananas = 'pineapple'
+
+a = Pokus()
+
+
 @app.route("/home")
 def home(request):
-    return "Hello from the HOME page"
+    # raise AttributeError('bla')
+    return render('home.html', {'pokus': a})
 
 
 @app.route("/about")
@@ -24,6 +34,11 @@ def greeting(request):
     return "KOKOS!"
 
 
+def custom_exception_handler(request, exception_cls):
+    return "Oops! Something went wrong. Please, contact our customer support."
+
+
 if __name__ == '__main__':
+    # app.add_exception_handler(custom_exception_handler)
     app()
 

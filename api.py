@@ -7,6 +7,7 @@ from parse import parse
 
 class API:
     def __init__(self, server_host: str = '127.0.0.1', server_port: int = 8000):
+        self.exception_handler = None
         self.routes = {}
 
         # Create socket
@@ -33,19 +34,27 @@ class API:
 
         handler, kwargs = self.find_handler(request_path=path)
 
-        if handler is not None:
-            if inspect.isclass(handler):
-                method = headers[0].split()[0]
-                handler = getattr(handler(), method.lower(), None)
+        try:
+            if handler is not None:
+                if inspect.isclass(handler):
+                    method = headers[0].split()[0]
+                    handler = getattr(handler(), method.lower(), None)
 
-                if handler is None:
-                    raise AttributeError("Method now allowed", method)
+                    if handler is None:
+                        raise AttributeError("Method now allowed", method)
 
-            content = handler(request, **kwargs)
-            response = 'HTTP/1.0 200 OK\n\n' + content
+                content = handler(request, **kwargs)
+                response = 'HTTP/1.0 200 OK\n\n' + content
 
-        else:
-            response = self.default_response()
+            else:
+                response = self.default_response_handler()
+
+        except Exception as e:
+            if self.exception_handler is None:
+                raise e
+            else:
+                content = self.exception_handler(request, e)
+                response = 'HTTP/1.0 500 INTERNAL SERVER ERROR\n\n' + content
 
         return response
 
@@ -67,7 +76,7 @@ class API:
 
         return wrapper
 
-    def default_response(self):
+    def default_response_handler(self):
         content = 'HTTP/1.0 404 Not Found\n\n'
 
         if os.path.exists('templates/404.html'):
@@ -77,3 +86,6 @@ class API:
             return content + file_content
 
         return content
+
+    def add_exception_handler(self, exception_handler):
+        self.exception_handler = exception_handler
