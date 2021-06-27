@@ -9,13 +9,17 @@ class Pokus:
     true = False
     ananas = 'pineapple'
 
+
+papaja = 'papayaaaaaaa'
+
 a = Pokus()
+meals = {'bramborak': '22kc', 'houska': '5kc'}
 
 
 @app.route("/home")
 def home(request):
     # raise AttributeError('bla')
-    return render('home.html', {'pokus': a})
+    return render('home.html', {'pokus': a, 'papaja': papaja, 'my_range': ['1', '2', '3'], 'meals': meals})
 
 
 @app.route("/about")
@@ -39,6 +43,9 @@ def custom_exception_handler(request, exception_cls):
 
 
 if __name__ == '__main__':
+    # a = Pokus()
+    # print(a.meloun[0])
     # app.add_exception_handler(custom_exception_handler)
+
     app()
 

@@ -20,14 +20,18 @@ def render(template: str, kwargs: dict = None):
         response = response.replace('{{ ', '{{').replace(' }}', '}}').replace('{% ', '{%').replace(' %}', '%}')
 
         for_loop = re.findall('{%for.+endfor%}', response, flags=re.MULTILINE)
-
+        dict_loop = re.findall('{%for[^{]*%}', for_loop[0], flags=re.MULTILINE)
+        if dict_loop:
+            response = dict_loop_handler(re.search('({%for)((?!{%).)*{%endfor%}', for_loop[0]).group(), response,
+                                         kwargs)
+        for_loop = re.findall('{%for.+endfor%}', response, flags=re.MULTILINE)
         while for_loop:
             response, _ = loop_handler(for_loop, response, kwargs)
             for_loop = re.findall('{%for.+endfor%}', response, flags=re.MULTILINE)
 
         while '{{' in response:
             text_match = re.findall('{{[^}{]*}}', response)[0]
-            result = match_variable(text_match, kwargs)
+            result = variable_handler(text_match, kwargs)
 
             try:
                 response = response.replace(text_match, result)
@@ -37,7 +41,7 @@ def render(template: str, kwargs: dict = None):
         while '{%' in response:
             text_match = re.findall('{%[^}{]*%}', response)
             text_match_first = text_match[0]
-            result = match_fnc(text_match_first, kwargs)
+            result = fnc_handler(text_match_first, kwargs)
             result = eval(result) if result else ''
 
             try:
@@ -49,6 +53,35 @@ def render(template: str, kwargs: dict = None):
         return response
 
 
+def dict_loop_handler(dict_loop, response, kwargs):
+    result = []
+    start = re.findall('{%for[^{]*%}', dict_loop, flags=re.MULTILINE)[0]
+    dict_key = start.split('%}')[0].split('for ')[1].split(',')[0].strip()
+    dict_value = start.split('%}')[0].split('for ')[1].split(',')[1].strip().split()[0]
+    dictionary = start.split('%}')[0].split(' in ')[1].strip().split()[0].split('.')[0]
+    dictionary = variable_handler(dictionary, kwargs)
+
+    text = dict_loop.replace(re.findall('{%for[^{]*%}', dict_loop)[0], '')
+    text = text.replace(re.findall('{%endfor%}', text)[-1], '')
+
+    for key, value in dictionary.items():
+        kwargs[dict_key] = key
+        kwargs[dict_value] = value
+        loop_text = text
+
+        for i in range(len(re.findall('{{[^{]+}}', loop_text))):
+            item = re.findall('{{[^{]+}}', text)[i]
+            new_item = variable_handler(item, kwargs)
+            loop_text = loop_text.replace(item, new_item)
+
+        result.append(loop_text)
+
+    response = response.replace(text, ' '.join(result))
+    response = response.replace(start, '').replace(re.findall('{%endfor%}', dict_loop)[0], '', 1)
+
+    return response
+
+
 def loop_handler(for_loop, response, kwargs):
     loop = '%}'.join(for_loop[0].split('%}')[1:])
     loop = '{%'.join(loop.split('{%')[:-1])
@@ -57,20 +90,17 @@ def loop_handler(for_loop, response, kwargs):
     if nested_loop:
         response, for_loop = loop_handler(nested_loop, response, kwargs)
 
-    # TODO: add handling for nested loops
-    # for_loop = re.findall('{%for.+endfor%}', response, flags=re.MULTILINE)
     text_match = re.findall('{%[^}{]*%}', for_loop[0])
     text_match_first = text_match[0]
     var = text_match_first.replace('{%', '').replace('%}', '').split('for ')[1].split()[0]
     value_original = text_match_first.replace('{%', '').replace('%}', '').split(' in ')[1].split()[0]
-    value = match_variable(value_original, kwargs)
+    value = variable_handler(value_original, kwargs)
     match = for_loop[0]
     match_modified = match.replace(text_match_first, '').replace(text_match[-1], '')
     result = []
 
     for i in range(len(value)):
-        # kwargs[var] = item
-        word = match_modified.replace(('{{' + var + '}}'), '{%' + f'{value_original}[{i}]' + '%}')
+        word = match_modified.replace(('{{' + var + '}}'), '{{' + f'{value_original}[{i}]' + '}}')
         result.append(word)
 
     result = ' '.join(result)
@@ -80,72 +110,53 @@ def loop_handler(for_loop, response, kwargs):
     return response, for_loop
 
 
-def match_variable(text, kwargs):
-    # html_start = ''
-    # html_end = ''
-    #
-    # if re.findall('.+{{', text):
-    #     html_start = re.findall('.+{{', text)[0].replace('{{', '')
-    #     html_end = re.findall('}}.+', text)[0].replace('}}', '')
-    #     text = text.split('{{')[1].split('}}')[0]
-    # else:
-    text = text.replace('{{', '').replace('}}', '')
+def slicing_handler(text: str, kwargs: dict, arg=None):
+    if re.findall('[\d+]', text):
+        index: int = int(text.split('[')[1].replace(']', ''))
+        if text.split('[')[0] in kwargs:
+            arg = kwargs[text.split('[')[0]]
+            arg = arg[index]
+            return arg
+        if arg:
+            arg = getattr(arg, text.split('[')[0])[int(index)]
+            return arg
+    return None
 
+
+def variable_handler(text: str, kwargs: dict):
+    text = text.replace('{{', '').replace('}}', '')
     text = text.strip().split('.')
+    arg = slicing_handler(text[0], kwargs)
 
     if text[0] in kwargs:
         arg = kwargs[text[0]]
 
+    if arg:
         for i in text[1:]:
-            if '[' in i:
-                index = i.split('[')[1].replace(']', '')
-                arg = getattr(arg, i.split('[')[0])[int(index)]
-            else:
-                arg = getattr(arg, i)
-
-        # if html_start or html_end:
-        #     return html_start + arg + html_end
-
+            arg = slicing_handler(i, kwargs, arg) if slicing_handler(i, kwargs, arg) else getattr(arg, i)
         return arg
     return None
 
 
-def match_fnc(text, kwargs):
+def fnc_handler(text, kwargs):
     result = []
     text = text.replace('{%', '').replace('%}', '').strip()
     text = text.split()
+
     for word in text:
         if '.' in word:
-            word = match_variable(word, kwargs)
-            word = f'"{word}"' if isinstance(word, str) else word
-            if isinstance(word, list):
-                l = ', '.join(word)
-                word = f'"[{l}"]' if isinstance(word, list) else word
-            if word in kwargs:
-                result.append(kwargs[word])
-            else:
-                result.append(word)
-
+            word = f'"{variable_handler(word, kwargs)}"'
         elif re.findall('[\d+]', word.__str__()):
-            index = re.findall('[\d+]', word)[0].replace('[', '').replace(']', '')
-            if word.split('[')[0] in kwargs:
-                result.append(eval(f"{kwargs[word.split('[')[0]]}[{index}]"))
-        elif word in kwargs:
-            result.append(kwargs[word])
+            word = slicing_handler(word, kwargs)
+
+        if word in kwargs:
+            result.append(f'"{kwargs[word]}"')
         else:
             result.append(word)
 
-    try:
-        result = ' '.join(result)
-    except TypeError:
-        result = ' '.join([word.__str__() for word in result])
+    result = ' '.join(result)
     return result
 
 
 if __name__ == '__main__':
-    class Hello:
-        meloun = 'whatever'
-        true = None
-
-    a = Hello()
-    render('home.html', {'pokus': a})
+    pass

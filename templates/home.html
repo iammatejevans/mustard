@@ -4,9 +4,18 @@
     </header>
 
     <body>
+        {% for meal, price in meals.items() %}
+            <p>{{meal}}</p>
+            <p>{{price}}</p>
+        {%endfor %}
         The name of the framework is {% pokus.ananas if pokus.true else "nothing" %}
         {% for element in pokus.meloun %}
-            <p>{{element}}</p>
+            <p>{{element}} {{papaja}} {{ element }}</p>
+            <ul>
+                {% for i in my_range %}
+                    <li>{{ i }}</li>
+                {% endfor %}
+            </ul>
         {% endfor %}
     </body>
 
