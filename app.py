@@ -1,4 +1,5 @@
 from api import API
+from middleware import Middleware
 from utils import render
 
 app = API()
@@ -42,10 +43,17 @@ def custom_exception_handler(request, exception_cls):
     return "Oops! Something went wrong. Please, contact our customer support."
 
 
-if __name__ == '__main__':
-    # a = Pokus()
-    # print(a.meloun[0])
-    # app.add_exception_handler(custom_exception_handler)
+class CustomMiddleware(Middleware):
+    def process_request(self, req):
+        print('Processing request', req)
 
+    def process_response(self, req, res):
+        print('Processing response')
+
+
+app.add_middleware(CustomMiddleware)
+
+
+if __name__ == '__main__':
     app()
 

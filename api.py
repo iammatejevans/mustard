@@ -4,11 +4,14 @@ import socket
 
 from parse import parse
 
+from middleware import Middleware
+
 
 class API:
     def __init__(self, server_host: str = '127.0.0.1', server_port: int = 8000):
         self.exception_handler = None
         self.routes = {}
+        self.middleware = Middleware(self)
 
         # Create socket
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -18,11 +21,14 @@ class API:
         print('Listening on port %s ...' % server_port)
 
     def __call__(self):
+        return self.wsgi_app()
+
+    def wsgi_app(self):
         while True:
             client_connection, client_address = self.server_socket.accept()
 
             request = client_connection.recv(1024).decode()
-            print(request)
+            self.middleware(request)
 
             response = self.handle_request(request)
             client_connection.sendall(response.encode())
@@ -89,3 +95,6 @@ class API:
 
     def add_exception_handler(self, exception_handler):
         self.exception_handler = exception_handler
+
+    def add_middleware(self, middleware_cls):
+        self.middleware.add(middleware_cls)
